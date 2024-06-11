@@ -1,27 +1,19 @@
-# Use the official Go base image for your Go version
-FROM golang:1.21 AS build
+FROM python:3.12
 
-# Set the working directory inside the container
+# Create and set the working directory
 WORKDIR /app
 
-# Copy the Go source code into the container
+# Copy only the requirements file first to leverage Docker caching
+COPY requirements.txt .
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the entire application code
 COPY . .
 
-# Build the Go application
-RUN CGO_ENABLED=0 GOOS=linux go build -o app
-
-# Use a smaller base image to create the final image
-FROM alpine:latest
-
-# Set the working directory inside the container
-WORKDIR /app
-
-# Copy the compiled Go application from the build image
-COPY --from=build /app/app .
-
-# Expose the port that your Go application listens on
+# Expose the port your application will run on
 EXPOSE 8080
 
-# Define the command to run your Go application
-CMD ["./app"]
-
+# Specify the command to run on container start
+CMD ["flask", "--app", "main", "run", "--host", "0.0.0.0", "--port", "8080"]
