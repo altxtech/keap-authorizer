@@ -1,0 +1,58 @@
+# This workflow build and push a Docker container to Google Artifact Registry and deploy it on Cloud Run when a commit is pushed to the "main" branch
+#
+# Overview:
+#
+# 1. Authenticate to Google Cloud
+# 2. Setup OpenTofu
+# 3. Initialize Tofu and select workspace
+# 4. Plan and apply changes
+#
+# To configure this workflow:
+#
+# 1. Ensure the required Google Cloud APIs are enabled:
+# 2. Create and configure Workload Identity Federation for GitHub (https://github.com/google-github-actions/auth#setting-up-workload-identity-federation)
+# 3. Ensure the required IAM permissions are granted
+# 4. Configure Environment Variables for repository
+
+name: Destroy
+
+on: workflow_dispatch
+
+jobs:
+  deploy:
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    runs-on: ubuntu-latest
+    environment:  ${{ fromJSON('["dev", "prod"]')[github.ref_name == 'main'] }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: '${{ vars.WIF_PROVIDER }}' 
+          service_account: '${{ vars.WIF_SERVICE_ACCOUNT }}' 
+
+      - name: Tofu Setup
+        uses: opentofu/setup-opentofu@v1
+
+      - name: Tofu Init
+        run: tofu init --backend-config "bucket=${{ vars.TF_BUCKET }}" --backend-config "prefix=${{ vars.TF_PREFIX }}"
+
+      - name: Tofu Select Workspace
+        if: ${{ env.tf_workspace != '' }}
+        run: tofu workspace select --or-create ${{ vars.tf_workspace }}
+
+      - name: Tofu Destroy
+        run: |
+          tofu destroy --auto-approve \
+          --var "project_id=${{ vars.PROJECT_ID }}" \
+          --var "region=${{ vars.REGION }}" \
+          --var "service_name=${{ vars.SERVICE }}" \
+          --var "env=${{ vars.ENV }}" \
+          --var "gcloud_access_token=${{ env.steps.auth.outputs.access_token }}"                             
