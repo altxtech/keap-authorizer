@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>New Integration</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="mt-5">Create New Integration</h1>
+        <form action="{{ url_for('new_integration') }}" method="POST">
+            <div class="form-group">
+                <label for="name">Integration Name</label>
+                <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Create Integration</button>
+        </form>
+    </div>
+</body>
+</html>
+

@@ -9,24 +9,28 @@
     <div class="container">
         <h1 class="mt-5">Integrations</h1>
         <div class="mb-3">
-            <a href="{{ auth_url }}" class="btn btn-primary">New Integration</a>
+            <a href="{{ new_integration_url }}" class="btn btn-primary">New Integration</a>
         </div>
         <table class="table table-striped">
             <thead>
                 <tr>
                     <th>Created At</th>
-                    <th>App ID</th>
+                    <th>Handle</th>
                     <th>Name</th>
-                    <th>Email</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Reference</th>
                 </tr>
             </thead>
             <tbody>
                 {% for integration in integrations %}
                     <tr>
                         <td>{{ integration.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                        <td>{{ integration.app_id }}</td>
+                        <td>{{ integration.handle }}</td>
                         <td>{{ integration.name }}</td>
-                        <td>{{ integration.email }}</td>
+                        <td>{{ integration.type }}</td>
+                        <td>{{ integration.status }}</td>
+                        <td>{{ integration.ref }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
