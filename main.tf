@@ -124,7 +124,7 @@ data "google_iam_policy" "secret_access" {
   binding {
     role = "roles/secretmanager.secretAccessor"
     members = [
-		google_service_account.sa.email
+		"serviceAccount:${google_service_account.sa.email}"
     ]
   }
 }
