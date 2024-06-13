@@ -124,7 +124,7 @@ data "google_iam_policy" "secret_access" {
   binding {
     role = "roles/secretmanager.secretAccessor"
     members = [
-
+		"serviceAccount:${google_service_account.sa.email}"
     ]
   }
 }
@@ -170,7 +170,7 @@ resource "google_cloud_run_service" "app" {
     spec {
       containers {
 
-        image = docker_registry_image.image.name
+        image = "${docker_registry_image.image.name}:latest"
         env {
           name  = "ENV"
           value = var.env

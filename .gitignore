@@ -29,3 +29,13 @@ go.work
 # some folder
 tmp
 creds
+
+# python
+.venv
+*pycache*
+
+# Local environemnt / secrets
+*.env
+secrets
+tmp
+config.json

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Integrations</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="mt-5">Integrations</h1>
+        <div class="mb-3">
+            <a href="{{ auth_url }}" class="btn btn-primary">New Integration</a>
+        </div>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Created At</th>
+                    <th>App ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for integration in integrations %}
+                    <tr>
+                        <td>{{ integration.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>{{ integration.app_id }}</td>
+                        <td>{{ integration.name }}</td>
+                        <td>{{ integration.email }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
+
