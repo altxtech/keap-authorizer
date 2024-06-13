@@ -1,38 +1,48 @@
 from flask import request, Flask, render_template, url_for, redirect
 
-from wtforms import Form, StringField, SubmitField
-
 import os
 import urllib.parse
 import json
 import requests 
+from datetime import datetime
+
+from google.cloud import secretmanager, firestore
 
 
 app = Flask(__name__)
+db = firestore.Client(database = os.environ["DATABASE_ID"].split("/")[-1])
+integrations_ref = db.collection("integrations")
 
 # configuration
+def get_secret(secret_id, version_id="latest"):
+    '''
+    Return string value of secret
+    '''
+    # Create the Secret Manager client.
+    client = secretmanager.SecretManagerServiceClient()
+    # Build the resource name of the secret version.
+    name = f"{secret_id}/versions/{version_id}"
+    # Access the secret version.
+    response = client.access_secret_version(name=name)
+    # Return the decoded payload.
+    return response.payload.data.decode("UTF-8")
+
 def load_config() -> dict:
-    env = os.environ["ENV"]
-    if env == "local":
-        with open("config.json", "r") as f:
-            return json.load(f)
-    return {}
-
+    secret_id = os.environ["SECRET_ID"]
+    secret_content = get_secret(secret_id) 
+    return json.loads(secret_content)
+    
 config = load_config()
+print(f"Config: {config}")
 
-class NewCustomerForm(Form):
-    identifier = StringField('Identifier')
-    submit = SubmitField('Create')
+def keap_auth_url():
 
-
-def keap_auth_url(state):
     base_url = "https://accounts.infusionsoft.com/app/oauth/authorize" # Can I hardcode this?
     params = {
             "client_id": config["KEAP_CLIENT_ID"],
             "redirect_uri": config["HOST"] + url_for('auth'),
             "scope": "full",
-            "response_type": "code",
-            "state": state
+            "response_type": "code"
     }
     return base_url + "?" + urllib.parse.urlencode(params)
 
@@ -40,32 +50,19 @@ def keap_auth_url(state):
 def hello():
     return render_template("base.html")
 
-@app.route("/newCustomer", methods=['GET','POST'])
-def new_customer():
-    
-    form = NewCustomerForm(request.form)
-    if request.method == 'POST' and form.validate():
-        
-        # Build the state object
-        print(form.identifier)
+@app.route("/integrations", methods=['GET','POST'])
+def integrations():
 
-        state_data = {"identifier": form.identifier.data}
-        state = json.dumps(state_data)
+    all_integrations = [doc.to_dict() for doc in integrations_ref.stream()]
 
-        # Get the auth urllib
-        auth_url = keap_auth_url(state)
-        return redirect(auth_url)
-        
+    return render_template("integrations.html", integrations = all_integrations, auth_url = keap_auth_url())
 
-    return render_template("new_customer.html", form=form)
-
-@app.route("/newCustomer/auth")
+@app.route("/integrations/auth")
 def auth():
     print(request.args)
 
     # Exchange code for access token
     auth_code = request.args["code"]
-    state = json.loads(request.args["state"])
     
     form_data = {
             "client_id": config["KEAP_CLIENT_ID"],
@@ -83,13 +80,23 @@ def auth():
     # Research business profile
     h = {"Authorization": "Bearer " + access_token}
     r = requests.get("https://api.infusionsoft.com/crm/rest/v2/businessProfile", headers = h)
+    r.raise_for_status()
 
     # Store customer info in the database, capture lead for sg
-    # TODO
+    profile = r.json()
+    print(profile)
+    new_integration = {
+            "created_at": datetime.utcnow(),
+            "app_id": keap_app_id,
+            "name": profile["name"],
+            "email": profile["email"]
+    }
+    integrations_ref.document().set(new_integration)
+    
 
     # Deploy airbyte destination
     payload = {
-            "name": state["identifier"] + "_" + "keap",
+            "name": keap_app_id + "_" + "keap",
             "definitionId": config["AIRBYTE_DESTINATION_KEAP_DEFINITION_ID"],
             "workspaceId": config["AIRBYTE_WORKSPACE_ID"],
             "configuration": {
@@ -107,4 +114,4 @@ def auth():
     )
     r.raise_for_status()
 
-    return "Integration Successful"
+    return redirect(url_for("integrations"))

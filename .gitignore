@@ -38,3 +38,4 @@ creds
 *.env
 secrets
 tmp
+config.json
