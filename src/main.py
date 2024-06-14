@@ -1,4 +1,7 @@
-from flask import request, Flask, render_template, url_for, redirect
+from flask import request, Flask, render_template, url_for, redirect, session, flash
+from flask_httpauth import HTTPBasicAuth
+from werkzeug.security import generate_password_hash, check_password_hash
+
 import os
 import urllib.parse
 import json
@@ -11,6 +14,7 @@ from google.cloud import secretmanager, firestore
 app = Flask(__name__)
 db = firestore.Client(database=os.environ["DATABASE_ID"].split("/")[-1])
 integrations_ref = db.collection("integrations")
+users_ref = db.collection("users")
 
 # Configuration
 def get_secret(secret_id, version_id="latest"):
@@ -41,11 +45,39 @@ def load_config() -> dict:
 config = load_config()
 print(f"Config: {config}")
 
+# Authentication
+auth = HTTPBasicAuth()
+@auth.verify_password
+def verify_password(username, password):
+    # Get user
+    user_doc = users_ref.document(username).get()
+    if user_doc.exists:
+        user = user.to_dict()
+        if check_password_hash(user["password"], password):
+            return  user
+
+@auth.get_user_roles
+def get_user_roles(user):
+    return user["roles"]
+
+def _create_user(username, password, roles):
+
+    if not roles: # Empty string or null
+        roles = ["user"]
+
+    user = {
+            "username": username,
+            "password": generate_password_hash(password),
+            "roles": roles
+    }
+    users_ref.document(username).create(user)
+
+# Keap stuff
 def keap_auth_url(state):
     base_url = "https://accounts.infusionsoft.com/app/oauth/authorize" # Can be hardcoded
     params = {
         "client_id": config["KEAP_CLIENT_ID"],
-        "redirect_uri": config["HOST"] + url_for('auth'),
+        "redirect_uri": config["HOST"] + url_for('new_integration_auth_callback'),
         "scope": "full",
         "response_type": "code",
         "state": state
@@ -65,10 +97,51 @@ def _gen_handle(name):
     return handle
 
 @app.route("/")
-def hello():
+def index():
     return redirect(url_for("integrations"))
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        return render_template("login-form.html")
+
+    username = request.form["username"]
+    password = request.form["password"]
+    user = verify_password(username, password)
+    if user:
+        next_page = request.args.get('next')
+        return redirect(next_page or url_for('integrations'))
+    else:
+        flash("Invalid username or password")
+        return redirect(url_for("login"))
+
+@app.route("/logout")
+def logout():
+    session.pop('user', None)
+    return redirect(url_for("login"))
+
+@app.route("/users")
+@auth.login_required(role="admin")
+def users():
+    return render_template(
+        "users.html",
+        new_user_url=url_for("new_user")
+    )
+
+@app.route("/users/new-user", methods=["GET", "POST"])
+@auth.login_required(role="admin")
+def new_user():
+    if request.method == "GET":
+        return render_template("new-user-form.html")
+    username = request.form["username"]
+    password = request.form["password"]
+    roles = request.form["roles"].split(",")  # assuming roles are provided as a comma-separated string
+    _create_user(username, password, roles)
+    return redirect(url_for("users"))
+
+
 @app.route("/integrations")
+@auth.login_required
 def integrations():
     all_integrations = [doc.to_dict() for doc in integrations_ref.stream()]
     return render_template(
@@ -77,7 +150,12 @@ def integrations():
         new_integration_url=url_for("new_integration")
     )
 
+# TODO - Aditional requirements
+# - If the user the user is not authenticated, it should be redirected to the login page
+# - After login, ideally they should be redirected to the page they were trying to access, but should at least be redirected to integrations page
+
 @app.route("/integrations/new-integration", methods=["GET", "POST"])
+@auth.login_required
 def new_integration():
     if request.method == "GET":
         '''
@@ -97,8 +175,9 @@ def new_integration():
     state = json.dumps({"name": name})
     return redirect(keap_auth_url(state))
 
-@app.route("/integrations/auth")
-def auth():
+@app.route("/integrations/new-integration/auth/callback")
+@auth.login_required
+def new_integration_auth_callback():
     # Create new integration object
     state = json.loads(request.args["state"])
     new_integration = {
