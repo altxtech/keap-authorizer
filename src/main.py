@@ -49,16 +49,25 @@ print(f"Config: {config}")
 auth = HTTPBasicAuth()
 @auth.verify_password
 def verify_password(username, password):
-    # Get user
-    user_doc = users_ref.document(username).get()
-    if user_doc.exists:
-        user = user.to_dict()
-        if check_password_hash(user["password"], password):
-            return  user
+
+    # Username should not be empty
+    if not username:
+        return False
+
+    # User must exist
+    user = users_ref.document(username).get()
+    if not user.exists:
+        return False
+
+    # Password must match
+    if not check_password_hash(user.get("password"), password):
+        return False
+    
+    return  user
 
 @auth.get_user_roles
 def get_user_roles(user):
-    return user["roles"]
+    return user.get("roles")
 
 def _create_user(username, password, roles):
 
@@ -71,6 +80,11 @@ def _create_user(username, password, roles):
             "roles": roles
     }
     users_ref.document(username).create(user)
+
+@auth.error_handler
+def auth_error(status):
+    html = render_template("error.html", message = f"{status} - Unauthorized")
+    return html, status
 
 # Keap stuff
 def keap_auth_url(state):
@@ -100,32 +114,16 @@ def _gen_handle(name):
 def index():
     return redirect(url_for("integrations"))
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "GET":
-        return render_template("login-form.html")
-
-    username = request.form["username"]
-    password = request.form["password"]
-    user = verify_password(username, password)
-    if user:
-        next_page = request.args.get('next')
-        return redirect(next_page or url_for('integrations'))
-    else:
-        flash("Invalid username or password")
-        return redirect(url_for("login"))
-
-@app.route("/logout")
-def logout():
-    session.pop('user', None)
-    return redirect(url_for("login"))
-
 @app.route("/users")
 @auth.login_required(role="admin")
 def users():
+
+    all_users = [user.to_dict() for user in users_ref.stream()]
+    print(all_users)
     return render_template(
         "users.html",
-        new_user_url=url_for("new_user")
+        new_user_url=url_for("new_user"),
+        users = all_users
     )
 
 @app.route("/users/new-user", methods=["GET", "POST"])
@@ -198,7 +196,7 @@ def new_integration_auth_callback():
         "client_secret": config["KEAP_CLIENT_SECRET"],
         "code": auth_code,
         "grant_type": "authorization_code",
-        "redirect_uri": config["HOST"] + url_for('auth')
+        "redirect_uri": config["HOST"] + url_for('new_integration_auth_callback')
     }
     r = requests.post("https://api.infusionsoft.com/token", data=form_data)
     r.raise_for_status()  # Ensure the request was successful
