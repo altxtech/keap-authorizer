@@ -1,6 +1,5 @@
-from flask import request, Flask, render_template, url_for, redirect, session, flash
-from flask_httpauth import HTTPBasicAuth
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Blueprint, request, Flask, render_template, url_for, redirect, session, current_app
+from werkzeug.security import generate_password_hash 
 
 import os
 import urllib.parse
@@ -9,65 +8,10 @@ import requests
 from datetime import datetime
 from uuid import uuid4
 import re
-from google.cloud import secretmanager, firestore
 
-app = Flask(__name__)
-db = firestore.Client(database=os.environ["DATABASE_ID"].split("/")[-1])
-integrations_ref = db.collection("integrations")
-users_ref = db.collection("users")
+from keap_authorizer.auth import auth
+from keap_authorizer.db import get_db
 
-# Configuration
-def get_secret(secret_id, version_id="latest"):
-    """
-    Return string value of secret
-    """
-    # Create the Secret Manager client.
-    client = secretmanager.SecretManagerServiceClient()
-    # Build the resource name of the secret version.
-    name = f"{secret_id}/versions/{version_id}"
-    # Access the secret version.
-    response = client.access_secret_version(name=name)
-    # Return the decoded payload.
-    return response.payload.data.decode("UTF-8")
-
-def load_config() -> dict:
-    if os.environ["ENV"] != "LOCAL":
-        # Load from GCP secret
-        secret_id = os.environ["SECRET_ID"]
-        secret_content = get_secret(secret_id) 
-        return json.loads(secret_content)
-    else:
-        # Load from config file
-        with open(os.environ["CONFIG_FILE"], "r") as f:
-            config = json.load(f)
-        return config
-
-config = load_config()
-print(f"Config: {config}")
-
-# Authentication
-auth = HTTPBasicAuth()
-@auth.verify_password
-def verify_password(username, password):
-
-    # Username should not be empty
-    if not username:
-        return False
-
-    # User must exist
-    user = users_ref.document(username).get()
-    if not user.exists:
-        return False
-
-    # Password must match
-    if not check_password_hash(user.get("password"), password):
-        return False
-    
-    return  user
-
-@auth.get_user_roles
-def get_user_roles(user):
-    return user.get("roles")
 
 def _create_user(username, password, roles):
 
@@ -79,19 +23,16 @@ def _create_user(username, password, roles):
             "password": generate_password_hash(password),
             "roles": roles
     }
-    users_ref.document(username).create(user)
+    get_db().create_user(user)
+    
 
-@auth.error_handler
-def auth_error(status):
-    html = render_template("error.html", message = f"{status} - Unauthorized")
-    return html, status
 
 # Keap stuff
 def keap_auth_url(state):
     base_url = "https://accounts.infusionsoft.com/app/oauth/authorize" # Can be hardcoded
     params = {
-        "client_id": config["KEAP_CLIENT_ID"],
-        "redirect_uri": config["HOST"] + url_for('new_integration_auth_callback'),
+        "client_id": current_app.config["KEAP_CLIENT_ID"],
+        "redirect_uri": current_app.config["HOST"] + url_for('main.new_integration_auth_callback'),
         "scope": "full",
         "response_type": "code",
         "state": state
@@ -110,23 +51,26 @@ def _gen_handle(name):
     handle = re.sub(r"[^a-z0-9-]", "", handle)
     return handle
 
-@app.route("/")
-def index():
-    return redirect(url_for("integrations"))
+# Routes
+main = Blueprint("main", __name__)
 
-@app.route("/users")
+@main.route("/")
+def index():
+    return redirect(url_for("main.integrations"))
+
+@main.route("/users")
 @auth.login_required(role="admin")
 def users():
 
-    all_users = [user.to_dict() for user in users_ref.stream()]
+    all_users = get_db().get_all_users()
     print(all_users)
     return render_template(
         "users.html",
-        new_user_url=url_for("new_user"),
+        new_user_url=url_for("main.new_user"),
         users = all_users
     )
 
-@app.route("/users/new-user", methods=["GET", "POST"])
+@main.route("/users/new-user", methods=["GET", "POST"])
 @auth.login_required(role="admin")
 def new_user():
     if request.method == "GET":
@@ -135,24 +79,24 @@ def new_user():
     password = request.form["password"]
     roles = request.form["roles"].split(",")  # assuming roles are provided as a comma-separated string
     _create_user(username, password, roles)
-    return redirect(url_for("users"))
+    return redirect(url_for("main.users"))
 
 
-@app.route("/integrations")
+@main.route("/integrations")
 @auth.login_required
 def integrations():
-    all_integrations = [doc.to_dict() for doc in integrations_ref.stream()]
+    all_integrations = get_db().get_all_integrations() 
     return render_template(
         "integrations.html",
         integrations=all_integrations,
-        new_integration_url=url_for("new_integration")
+        new_integration_url=url_for("main.new_integration")
     )
 
 # TODO - Aditional requirements
 # - If the user the user is not authenticated, it should be redirected to the login page
 # - After login, ideally they should be redirected to the page they were trying to access, but should at least be redirected to integrations page
 
-@app.route("/integrations/new-integration", methods=["GET", "POST"])
+@main.route("/integrations/new-integration", methods=["GET", "POST"])
 @auth.login_required
 def new_integration():
     if request.method == "GET":
@@ -166,14 +110,15 @@ def new_integration():
     name = request.form["name"]
     
     # Check if the name is unique
-    existing_integrations = [doc.to_dict() for doc in integrations_ref.where("name", "==", name).stream()]
-    if existing_integrations:
-        return "Integration name must be unique", 400
+    existing_integrations = get_db().get_all_integrations()
+    for integration in existing_integrations:
+        if integration["name"] == name:
+            return render_template("new-integration-form.html", error="Name must be unique")
 
     state = json.dumps({"name": name})
     return redirect(keap_auth_url(state))
 
-@app.route("/integrations/new-integration/auth/callback")
+@main.route("/integrations/new-integration/auth/callback")
 @auth.login_required
 def new_integration_auth_callback():
     # Create new integration object
@@ -192,11 +137,11 @@ def new_integration_auth_callback():
     # 1. Finish the OAuth flow
     auth_code = request.args["code"]
     form_data = {
-        "client_id": config["KEAP_CLIENT_ID"],
-        "client_secret": config["KEAP_CLIENT_SECRET"],
+        "client_id": current_app.config["KEAP_CLIENT_ID"],
+        "client_secret": current_app.config["KEAP_CLIENT_SECRET"],
         "code": auth_code,
         "grant_type": "authorization_code",
-        "redirect_uri": config["HOST"] + url_for('new_integration_auth_callback')
+        "redirect_uri": current_app.config["HOST"] + url_for('main.new_integration_auth_callback')
     }
     r = requests.post("https://api.infusionsoft.com/token", data=form_data)
     r.raise_for_status()  # Ensure the request was successful
@@ -215,6 +160,7 @@ def new_integration_auth_callback():
     profile = r.json()
     keap_details["name"] = profile["name"]
 
+    '''
     # Lead Capture
     # List users of the connected account
     r = requests.get("https://api.infusionsoft.com/crm/rest/v1/users", headers=h)
@@ -232,7 +178,7 @@ def new_integration_auth_callback():
     }
     
     lead_headers = {
-        "Authorization": "Bearer " + config["MAIN_KEAP_ACCESS_TOKEN"],
+        "Authorization": "Bearer " + current_app.config["MAIN_KEAP_ACCESS_TOKEN"],
         "Content-Type": "application/json"
     }
 
@@ -246,24 +192,25 @@ def new_integration_auth_callback():
         r = requests.post("https://api.infusionsoft.com/crm/rest/v2/contacts", headers=lead_headers, json=lead_payload)
         print(r.text)
         r.raise_for_status()
+    '''
 
 
     # Deploy Airbyte destination
     payload = {
         "name": new_integration["handle"] + "/" + "keap",
-        "definitionId": config["AIRBYTE_DESTINATION_KEAP_DEFINITION_ID"],
-        "workspaceId": config["AIRBYTE_WORKSPACE_ID"],
+        "definitionId": current_app.config["AIRBYTE_DESTINATION_KEAP_DEFINITION_ID"],
+        "workspaceId": current_app.config["AIRBYTE_WORKSPACE_ID"],
         "configuration": {
-            "client_id": config["KEAP_CLIENT_ID"],
-            "client_secret": config["KEAP_CLIENT_SECRET"],
+            "client_id": current_app.config["KEAP_CLIENT_ID"],
+            "client_secret": current_app.config["KEAP_CLIENT_SECRET"],
             "keap_app_id": keap_details["app_id"],
             "access_token": access_token,
             "refresh_token": refresh_token
         }
     }
     r = requests.post(
-        config["AIRBYTE_API_URL"] + "/destinations",
-        auth=(config["AIRBYTE_USERNAME"], config["AIRBYTE_PASSWORD"]),
+        current_app.config["AIRBYTE_API_URL"] + "/destinations",
+        auth=(current_app.config["AIRBYTE_USERNAME"], current_app.config["AIRBYTE_PASSWORD"]),
         json=payload
     )
     r.raise_for_status()  # Ensure the request was successful
@@ -279,6 +226,6 @@ def new_integration_auth_callback():
     new_integration["status_last_check"] = now
 
     # Create a new integration object
-    integrations_ref.document(new_integration["id"]).set(new_integration)
+    get_db().create_integration(new_integration)
 
-    return redirect(url_for("integrations"))
+    return redirect(url_for("main.integrations"))
