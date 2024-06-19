@@ -1,6 +1,6 @@
 from typing import Optional, Any
-from flask import current_app, g
-from google.cloud import firestore
+from flask import current_app
+from google.cloud import firestore 
 from werkzeug.security import generate_password_hash
 
 
@@ -14,13 +14,14 @@ class Database():
     def init_app(self, app):
         
         # Set root user
-        root_user = self.get_user("root")
+        root_user = self.get_user_by_id("root")
         if root_user is None:
 
             root_username = app.config["ROOT_USERNAME"]
             print("Root username: ", root_username)
             root_password = app.config["ROOT_PASSWORD"]
             root_user = {
+                "id": "root",
                 "username": root_username,
                 "password": generate_password_hash(root_password),
                 "roles": ["admin"]
@@ -40,22 +41,28 @@ class Database():
     
     # Users
     def create_user(self, user: dict) -> None:
-        self.users_ref.document(user["username"]).set(user)
+        self.users_ref.document(user["id"]).set(user)
 
-    def get_user(self, username: str) -> dict[str, Any] | None:
-        user = self.users_ref.document(username).get()
+    def get_user_by_id(self, id: str) -> dict[str, Any] | None:
+        user = self.users_ref.document(id).get()
         if user.exists:
             return user.to_dict()
+        return None
+
+    def get_user_by_username(self, username: str) -> dict[str, Any] | None:
+        user = self.users_ref.where("username", "==", username).get()
+        if user:
+            return user[0].to_dict()
         return None
 
     def get_all_users(self) -> list:
         return [user.to_dict() for user in self.users_ref.stream()]
 
-    def update_user(self, username: str, updates: dict) -> None:
-        self.users_ref.document(username).update(updates)
+    def update_user(self, id: str, updates: dict) -> None:
+        self.users_ref.document(id).update(updates)
 
-    def delete_user(self, username: str) -> None:
-        self.users_ref.document(username).delete()
+    def delete_user(self, id: str) -> None:
+        self.users_ref.document(id).delete()
 
     # Integrations
     def create_integration(self, integration: dict) -> None:

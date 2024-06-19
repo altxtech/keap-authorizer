@@ -3,6 +3,8 @@ from flask import Blueprint, request, render_template, url_for, redirect
 from werkzeug.security import generate_password_hash
 from keap_authorizer.db import get_db
 from keap_authorizer.auth import auth
+import re
+from uuid import uuid4
 
 bp = Blueprint("users", __name__, url_prefix="/users")
 
@@ -18,94 +20,135 @@ def check_reset_password(view):
 @bp.route("/")
 @auth.login_required(role="admin")
 @check_reset_password
-def users():
+def list_all():
     all_users = get_db().get_all_users()
     return render_template(
         "users.html",
-        new_user_url=url_for("users.new_user"),
         users = all_users
     )
 
-@bp.route("/new-user", methods=["GET", "POST"])
+@bp.route("/create", methods=["GET", "POST"])
 @auth.login_required(role="admin")
 @check_reset_password
-def new_user():
+def create():
 
     if request.method == "GET":
-        return render_template("new-user-form.html")
+        return render_template("create-user-form.html")
 
     username = request.form["username"]
     email = request.form["email"]
     password = request.form["password"]
-    roles = request.form["roles"].split(",")  # assuming roles are provided as a comma-separated string
+    confirm_password = request.form["confirm_password"]
+    roles = [role.strip().lower() for role in request.form["roles"].split(",")]  # assuming roles are provided as a comma-separated string
 
-    _create_user(username, password, email, roles)
+    # Validate data
+    # Username should be unique
+    errors = []
+    if get_db().get_user_by_username(username):
+        errors.append("Username already exists")
     
-    return redirect(url_for("users.users"))
+    print("Here")
+    # Email is syntactically valid
+    email_re = re.compile(r"[^@]+@[^@]+\.[^@]+")
+    if not email_re.match(email):
+        errors.append("Invalid email address")
 
-def _create_user(username: str, password: str, email: str, roles: list[str]):
+    # Password is at least 8 characters long
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters long")
 
-    # Add user 
+    # Passwords match
+    if password != confirm_password:
+        errors.append("Passwords do not match")
+
+    # Roles must be valid
     if not roles:
         roles = ["user"]
 
+    valid_roles = ["admin", "user"]
+    for role in roles:
+        if role not in valid_roles:
+            errors.append(f"Invalid role: {role}")
+
+    if errors:
+        return render_template("create-user-form.html", errors=errors)
+
     # Insert the record in the database
     user = {
-        "username": username,
+        "id": str(uuid4()), "username": username,
         "email": email,
         "password": generate_password_hash(password),
         "reset_password": True, # User must reset password on first login
         "roles": roles
     }
     get_db().create_user(user)
+    print("here")
+    return redirect(url_for("users.list_all"))
 
-@bp.route("/<username>/edit", methods=["GET", "POST"])
+@bp.route("/<id>", methods=["GET"])
 @auth.login_required(role="admin")
 @check_reset_password
-def edit_user(username: str):
+def view(id: str):
+
+    user = get_db().get_user_by_id(id)
+    return render_template("user.html", user=user)
+
+
+@bp.route('/<id>/update', methods=["GET", "PUT"])
+@auth.login_required(role="admin")
+@check_reset_password
+def update(id: str):
 
     if request.method == "GET":
-        user = get_db().get_user(username)
-        return render_template("edit-user-form.html", user=user)
+        user = get_db().get_user_by_id(id)
+        return render_template("update-user-form.html", user=user)
 
+    # Update user
     email = request.form["email"]
-    roles = request.form["roles"].split(",")
-    get_db().update_user(username, {"email": email, "roles": roles})
+    roles = [role.strip().lower() for role in request.form["roles"].split(",")]
 
-    return redirect(url_for("users.users"))
+    # Validate email
+    errors = []
+    email_re = re.compile(r"[^@]+@[^@]+\.[^@]+")
+    if not email_re.match(email):
+        errors.append("Invalid email address")
 
-@bp.route("/<username>/delete", methods=["POST"])
-@auth.login_required(role="admin")
-@check_reset_password
-def delete_user(username: str):
-    
-        get_db().delete_user(username)
-        return redirect(url_for("users.users"))
+    # Validate roles
+    valid_roles = ["admin", "user"]
+    for role in roles:
+        if role not in valid_roles:
+            errors.append(f"Invalid role: {role}")
+
+    if errors:
+        user = get_db().get_user_by_id(id)
+        return render_template("user.html", user=user, errors=errors)
+
+    get_db().update_user(id, {"email": email, "roles": roles})
+    return redirect(url_for("users.user", id=id))
 
 # Reset password
 # Users can reset their own passwrods
-@bp.route("/<username>/reset-password", methods=["GET", "POST"])
+@bp.route("/<id>/reset-password", methods=["GET", "POST"])
 @auth.login_required()
-def reset_password(username: str):
-
-    cur_user = auth.current_user()
-    if not cur_user:
-        raise Exception("User not logged in")
+def reset_password(id: str):
 
     # Users can only access their own profile
+    cur_user = auth.current_user()
+
     is_admin = "admin" in cur_user["roles"]
-    is_owner = cur_user["username"] == username
+    is_owner = cur_user["id"] == id
+
     if not is_admin and not is_owner:
-        raise Exception("Unauthorized")
+        raise redirect(url_for("main.integrations", errors=["You do not have permission to access this page"]))
 
     if request.method == "GET":
-        return render_template("reset-password-form.html", username=username)
+        return render_template("reset-password-form.html", user_id=id)
 
     password = request.form["new_password"]
     confirm_password = request.form["new_password_confirm"]
 
     if password != confirm_password:
-        return render_template("reset-password-form.html", username=username, error="Passwords do not match")
+        return render_template("reset-password-form.html", user_id=id, errors=["Passwords do not match"])
 
     # If the password is being reset by and admin, the user will be required to reset their pasword
     reset_password = is_admin
@@ -113,6 +156,18 @@ def reset_password(username: str):
         "password": generate_password_hash(password),
         "reset_password": reset_password
     }
-    get_db().update_user(username, updates)
+    get_db().update_user(id, updates)
 
-    return redirect(url_for("main.integrations"))
+    return redirect(url_for("users.user",  id=id))
+
+@bp.route("/<id>/delete", methods=["GET", "DELETE"])
+@auth.login_required(role="admin")
+@check_reset_password
+def delete(id: str):
+
+    if request.method == "GET":
+        user = get_db().get_user_by_id(id)
+        return render_template("confirm-delete-user.html", user=user)
+
+    get_db().delete_user(id)
+    return redirect(url_for("users.list_all"))

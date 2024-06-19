@@ -14,7 +14,7 @@ def verify_password(username, password):
         return False
 
     # User must exist
-    user = get_db().get_user(username)
+    user = get_db().get_user_by_username(username)
     if user == None:
         return False
 

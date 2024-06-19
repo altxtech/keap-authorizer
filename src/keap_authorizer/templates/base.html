@@ -41,11 +41,16 @@
     <div class="wrapper">
         <nav class="sidebar">
 			<a href="{{ url_for('main.integrations') }}" class="nav-item">Integrations</a>
-			<a href="{{ url_for('users.users') }}" class="nav-item">Users</a>
+			<a href="{{ url_for('users.list_all') }}" class="nav-item">Users</a>
 		</ul>
         </nav>
         <div class="content">
-            {% block content %}{% endblock %}
+		{% block content %}{% endblock %}
+		<!--  Div to display alerts -->
+	    	<div class="container-md mt-3">
+			{% for error in errors %} <div class="alert alert-danger" role="alert">{{ error }}</div> {% endfor %}
+			{% for alert in alerts %} <div class="alert alert-warning" role="alert">{{ alert }}</div> {% endfor %}
+		</div>
         </div>
     </div>
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
