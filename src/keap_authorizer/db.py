@@ -54,6 +54,9 @@ class Database():
     def update_user(self, username: str, updates: dict) -> None:
         self.users_ref.document(username).update(updates)
 
+    def delete_user(self, username: str) -> None:
+        self.users_ref.document(username).delete()
+
     # Integrations
     def create_integration(self, integration: dict) -> None:
         self.integrations_ref.document(integration["name"]).set(integration)
