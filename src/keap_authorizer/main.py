@@ -5,27 +5,12 @@ import os
 import urllib.parse
 import json
 import requests 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 import re
 
 from keap_authorizer.auth import auth
 from keap_authorizer.db import get_db
-
-
-def _create_user(username, password, roles):
-
-    if not roles: # Empty string or null
-        roles = ["user"]
-
-    user = {
-            "username": username,
-            "password": generate_password_hash(password),
-            "roles": roles
-    }
-    get_db().create_user(user)
-    
-
 
 # Keap stuff
 def keap_auth_url(state):
@@ -57,29 +42,6 @@ main = Blueprint("main", __name__)
 @main.route("/")
 def index():
     return redirect(url_for("main.integrations"))
-
-@main.route("/users")
-@auth.login_required(role="admin")
-def users():
-
-    all_users = get_db().get_all_users()
-    print(all_users)
-    return render_template(
-        "users.html",
-        new_user_url=url_for("main.new_user"),
-        users = all_users
-    )
-
-@main.route("/users/new-user", methods=["GET", "POST"])
-@auth.login_required(role="admin")
-def new_user():
-    if request.method == "GET":
-        return render_template("new-user-form.html")
-    username = request.form["username"]
-    password = request.form["password"]
-    roles = request.form["roles"].split(",")  # assuming roles are provided as a comma-separated string
-    _create_user(username, password, roles)
-    return redirect(url_for("main.users"))
 
 
 @main.route("/integrations")
@@ -160,40 +122,11 @@ def new_integration_auth_callback():
     profile = r.json()
     keap_details["name"] = profile["name"]
 
-    '''
-    # Lead Capture
-    # List users of the connected account
-    r = requests.get("https://api.infusionsoft.com/crm/rest/v1/users", headers=h)
-    r.raise_for_status()
-    users = r.json()["users"]
-
-    # There is a ton of validation rules for contacts.
-    # Better to keep things simple and add complexity slowly
-
-    lead_payload_template = {
-        "email_addresses": [],
-        "given_name": "",
-        "family_name": "",
-        "source_type": "API",
-    }
-    
-    lead_headers = {
-        "Authorization": "Bearer " + current_app.config["MAIN_KEAP_ACCESS_TOKEN"],
-        "Content-Type": "application/json"
-    }
-
-    for user in users:
-        lead_payload = lead_payload_template.copy()
-        lead_payload["given_name"] = user["given_name"]
-        lead_payload["family_name"] = user["family_name"]
-        lead_payload["email_addresses"].append({"email": user["email_address"], "field": "EMAIL2"})
-
-
-        r = requests.post("https://api.infusionsoft.com/crm/rest/v2/contacts", headers=lead_headers, json=lead_payload)
-        print(r.text)
-        r.raise_for_status()
-    '''
-
+    # Attempt to capture leads. Log warning if it fails
+    try:
+        _capture_leads(access_token)
+    except Exception as e:
+        print(f"Failed to capture leads: {e}")
 
     # Deploy Airbyte destination
     payload = {
@@ -229,3 +162,73 @@ def new_integration_auth_callback():
     get_db().create_integration(new_integration)
 
     return redirect(url_for("main.integrations"))
+
+
+
+def _capture_leads(access_token):
+
+    # Extract users
+    h = {'Authorization': 'Bearer ' + access_token}
+    users = []
+
+    next = "https://api.infusionsoft.com/crm/rest/v1/users"
+    while True:
+        r = requests.get(next, headers=h)
+        r.raise_for_status()
+
+        new_users = r.json()["users"]
+        if len(new_users) == 0:
+            break
+
+        users.extend(new_users)
+        next = r.json()["next"]
+
+    # Get internal keap credentials
+    internal_creds = _get_internal_keap_credentials()
+    
+    lead_headers = {
+        "Authorization": "Bearer " + internal_creds["access_token"],
+        "Content-Type": "application/json"
+    }
+
+    for user in users:
+
+        new_lead = {
+                "given_name": user["given_name"],
+                "family_name": user["family_name"],
+                "email_address": [
+                    {"email": user["email_address"], "field": "EMAIL2"}
+                ],
+                "source_type": "API"
+        }
+
+        r = requests.post("https://api.infusionsoft.com/crm/rest/v2/contacts", headers=lead_headers, json=new_lead)
+        r.raise_for_status()
+
+def _get_internal_keap_credentials() -> dict:
+
+    # Fetch current credentials
+    internal_creds = get_db().get_internal("keap_credentials")
+    if not internal_creds:
+        raise Exception("Internal Keap credentials not found")
+
+    # Check if credentials are valid
+    expires_at = internal_creds.get("expires_at")
+    if not expires_at or datetime.fromisoformat(expires_at) < datetime.utcnow():
+        # Refresh token
+        form_data = {
+            "refresh_token": internal_creds["refresh_token"],
+            "grant_type": "refresh_token"
+        }
+        basic_auth = (current_app.config["KEAP_CLIENT_ID"], current_app.config["KEAP_CLIENT_SECRET"])
+        r = requests.post("https://api.infusionsoft.com/token", data=form_data, auth=basic_auth)
+        r.raise_for_status()
+
+        response_data = r.json()
+        internal_creds["access_token"] = response_data["access_token"]
+        internal_creds["refresh_token"] = response_data["refresh_token"]
+        internal_creds["expires_at"] = (datetime.utcnow() + timedelta(seconds=response_data["expires_in"])).isoformat()
+        get_db().update_internal("keap_credentials", internal_creds)
+
+    return internal_creds
+

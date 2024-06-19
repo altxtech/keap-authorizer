@@ -24,6 +24,7 @@ def verify_password(username, password):
         return False
 
     if not check_password_hash(pwd, password):
+        print("Wrong password")
         return False
     
     return  user

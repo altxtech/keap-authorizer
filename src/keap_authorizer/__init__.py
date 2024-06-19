@@ -2,7 +2,10 @@ import os
 
 from flask import Flask
 
+from keap_authorizer.db import Database
+
 from keap_authorizer.main import main
+from keap_authorizer.users import bp as users
 
 
 def create_app():
@@ -25,8 +28,13 @@ def create_app():
     elif env == "prod":
         app.config.from_object('config.ProductionConfig')
 
+    # Initialize Database
+    db = Database(app.config["DATABASE_ID"])
+    db.init_app(app)
+
     # Register blueprints
     app.register_blueprint(main)
+    app.register_blueprint(users)
 
 
     return app
