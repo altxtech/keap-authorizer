@@ -11,6 +11,7 @@ import re
 
 from keap_authorizer.auth import auth
 from keap_authorizer.db import get_db
+from keap_authorizer.users import check_reset_password
 
 # Keap stuff
 def keap_auth_url(state):
@@ -46,6 +47,7 @@ def index():
 
 @main.route("/integrations")
 @auth.login_required
+@check_reset_password
 def integrations():
     all_integrations = get_db().get_all_integrations() 
     return render_template(
@@ -60,6 +62,7 @@ def integrations():
 
 @main.route("/integrations/new-integration", methods=["GET", "POST"])
 @auth.login_required
+@check_reset_password
 def new_integration():
     if request.method == "GET":
         '''
@@ -82,6 +85,7 @@ def new_integration():
 
 @main.route("/integrations/new-integration/auth/callback")
 @auth.login_required
+@check_reset_password
 def new_integration_auth_callback():
     # Create new integration object
     state = json.loads(request.args["state"])
