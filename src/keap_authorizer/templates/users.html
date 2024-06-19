@@ -33,9 +33,9 @@
 					<td>{{ user.roles | join(', ') }}</td>
 					<div class="btn-group">
 						<td>
-							<a href="{{ url_for('users.edit', user_id=user.id) }}" class="btn btn-primary">Edit</a>
-							<a href="{{ url_for('users.reset_password', user_id=user.id) }}" class="btn btn-warning">Reset Password</a>
-							<a href="{{ url_for('users.delete', user_id=user.id) }}" class="btn btn-danger">Delete</a>
+							<a href="{{ url_for('users.edit_user', username=user.username) }}" class="btn btn-primary">Edit</a>
+							<a href="{{ url_for('users.reset_password', username=user.username) }}" class="btn btn-warning">Reset Password</a>
+							<a href="{{ url_for('users.delete_user', username=user.username) }}" class="btn btn-danger">Delete</a>
 						</td>
 				</tr>
 			{% endfor %}
