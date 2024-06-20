@@ -1,0 +1,10 @@
+{% extends "form.html" %}
+
+{% block title %}Confirm Delete{% endblock %}
+
+{% block form %}
+<form method="POST" action="{{ url_for('users.delete', id=user.id) }}">
+	<p>Are you sure you want to delete user <strong>{{ user.username }}</strong>?</p>
+	<button type="submit" class="btn btn-danger btn-block">Delete User</button>
+</form>
+{% endblock %}

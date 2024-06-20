@@ -33,6 +33,8 @@ creds
 # python
 .venv
 *pycache*
+instance
+config.py
 
 # Local environemnt / secrets
 *.env

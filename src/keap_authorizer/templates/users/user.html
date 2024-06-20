@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user.username }}{% endblock %}
+
+
+{% block content %}
+<div class="container mt-5">
+	<div class="card">
+	<div class="card-header">
+		<h2>{{  user.username }}</h2>
+	</div>
+	<div class="card-body">
+		<p><strong>Email:</strong> {{ user.email }}</p>
+		<p><strong>Password Reset Required:</strong> {% if user.reset_password %}<span class="badge badge-danger">Yes</span>{% else %}<span class="badge badge-success">No</span>{% endif %}</p>
+		<p><strong>Roles:</strong> {{ user.roles | join(', ') }}</p>
+		<div class="btn-group">
+			<a href="{{ url_for('users.update', id=user.idid) }}" class="btn btn-primary">Edit</a>
+			<a href="{{ url_for('users.reset_password', id=user.id) }}" class="btn btn-warning">Reset Password</a>
+			<a href="{{ url_for('users.delete', id=user.id) }}" class="btn btn-danger">Delete</a>
+		</div>
+	</div>
+</div>
+{% endblock %}

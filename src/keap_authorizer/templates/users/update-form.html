@@ -1,0 +1,17 @@
+{% extends "form.html" %}
+
+{% block title %}Edit User{% endblock %}
+
+{% block form %}
+<form method="POST" action="{{ url_for('users.update', id=user.id) }}">
+	<div class="form-group">
+		<label for="email">Email:</label>
+		<input type="text" class="form-control" value="{{ user.email }}" id="email" name="email" required>
+	</div>
+	<div class="form-group">
+		<label for="roles">Roles (comma-separated):</label>
+		<input type="text" class="form-control" id="roles" value="{{  user.roles | join(',') }}" name="roles" required>
+	</div>
+	<button type="submit" class="btn btn-primary btn-block">Update User</button>
+</form>
+{% endblock %}

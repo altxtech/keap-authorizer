@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Users{% endblock %}
+
+{% block content %}
+<div class="container">
+	<h1 class="mt-5">Users</h1>
+	<div class="mb-3">
+		<a href="{{ url_for('users.create') }}" class="btn btn-primary">Add New User</a>
+	</div>
+	<table class="table table-striped">
+		<thead>
+			<tr>
+				<th>Username</th>
+				<th>Email</th>
+				<th>PWD Reset Required</th> 
+				<th>Roles</th>
+				<th>Actions</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for user in users %}
+				<tr>
+					<td>{{ user.username }}</td>
+					<td>{{ user.email }}</td>
+					<td>
+						{% if user.reset_password %}
+							<span class="badge badge-danger">Yes</span>
+						{% else %}
+							<span class="badge badge-success">No</span>
+						{% endif %}
+					</td>
+					<td>{{ user.roles | join(', ') }}</td>
+					<td>
+						<div class="btn-group">
+							<a href="{{ url_for('users.update', id=user.id) }}" class="btn btn-primary">Edit</a>
+							<a href="{{ url_for('users.reset_password', id=user.id) }}" class="btn btn-warning">Reset PWD</a>
+							<a href="{{ url_for('users.delete', id=user.id) }}" class="btn btn-danger">Delete</a>
+						</div>
+					</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% endblock %}
+
