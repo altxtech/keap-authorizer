@@ -192,7 +192,7 @@ resource "google_cloud_run_service" "app" {
 	  volumes {
 		  name = "secret"
 		  secret {
-			  secret_name = "${var.service_name}-${var.env}-secret"
+			  secret_name = "keap-authorizer-dev-secret"
 			  items {
 				  key = "latest"
 				  path = "config.py"
