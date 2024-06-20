@@ -1,0 +1,13 @@
+# Enviroment variables
+.env
+
+# Local venv packages
+.venv
+
+# Config files
+.example.config.py
+config.py
+
+# Byte compiled
+*__pycache__
+*.pyc
