@@ -190,7 +190,7 @@ resource "google_cloud_run_v2_service" "app" {
         }
 		volume_mounts {
 			name = "app-config"
-			mount_path = "/usr/src/app"
+			mount_path = "/usr/src/app/instance"
 		}
       }
       service_account = google_service_account.sa.email
