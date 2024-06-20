@@ -193,7 +193,7 @@ resource "google_cloud_run_v2_service" "app" {
 			mount_path = "/usr/src/app"
 		}
       }
-      service_account_name = google_service_account.sa.email
+      service_account = google_service_account.sa.email
     }
 }
 
