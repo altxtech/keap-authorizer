@@ -47,17 +47,17 @@
         <div class="content">
 		{% block content %}{% endblock %}
 		<!--  Div to display alerts -->
-			<div class="container">
+			<div class="container mt-5">
 				{% for error in errors %}
-					<div class="row content-align-center">
+					<div class="row justify-content-center">
 						<div class="alert alert-danger col-6" role="alert">{{ error }}</div>
 					</div>
-				{% end for %}
+				{% endfor %}
 				{% for alert in alerts %}
-					<div class="row content-align-center">
-						<div class="alert alert-success col-6" role="alert">{{ alert }}</div>
+					<div class="row justify-content-center">
+						<div class="alert alert-success col-8" role="alert">{{ alert }}</div>
 					</div>
-				{% end for %}
+				{% endfor %}
 			</div>
         </div>
     </div>

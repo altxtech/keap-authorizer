@@ -11,6 +11,7 @@
 	</div>
 	<div class="card-body">
 		<p><strong>Email:</strong> {{ user.email }}</p>
+		<p><strong>Password Reset Required:</strong> {% if user.reset_password %}<span class="badge badge-danger">Yes</span>{% else %}<span class="badge badge-success">No</span>{% endif %}</p>
 		<p><strong>Roles:</strong> {{ user.roles | join(', ') }}</p>
 		<div class="btn-group">
 			<a href="{{ url_for('users.update', id=user.idid) }}" class="btn btn-primary">Edit</a>

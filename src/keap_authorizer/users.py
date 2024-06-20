@@ -13,7 +13,7 @@ def check_reset_password(view):
     def wrapped_view(**kwargs):
         user = auth.current_user()
         if user.get("reset_password"):
-            return redirect(url_for("users.reset_password", username=user["username"]))
+            return redirect(url_for("users.reset_password", id=user["id"]))
         return view(**kwargs)
     return wrapped_view
 
@@ -23,7 +23,7 @@ def check_reset_password(view):
 def list_all():
     all_users = get_db().get_all_users()
     return render_template(
-        "users.html",
+        "users/users.html",
         users = all_users
     )
 
@@ -33,7 +33,7 @@ def list_all():
 def create():
 
     if request.method == "GET":
-        return render_template("create-user-form.html")
+        return render_template("users/create-form.html")
 
     username = request.form["username"]
     email = request.form["email"]
@@ -71,7 +71,7 @@ def create():
             errors.append(f"Invalid role: {role}")
 
     if errors:
-        return render_template("create-user-form.html", errors=errors)
+        return render_template("users/create-form.html", errors=errors)
 
     # Insert the record in the database
     user = {
@@ -86,22 +86,30 @@ def create():
     return redirect(url_for("users.list_all"))
 
 @bp.route("/<id>", methods=["GET"])
-@auth.login_required(role="admin")
+@auth.login_required()
 @check_reset_password
 def view(id: str):
 
+    # Authorizer for admin or own user
+    user = auth.current_user()
+    is_admin = "admin" in user["roles"]
+    is_owner = user["id"] == id
+
+    if not is_admin and not is_owner:
+        return redirect(url_for("main.integrations", errors=["You do not have permission to access this page"]))
+
     user = get_db().get_user_by_id(id)
-    return render_template("user.html", user=user)
+    return render_template("users/user.html", user=user)
 
 
-@bp.route('/<id>/update', methods=["GET", "PUT"])
+@bp.route('/<id>/update', methods=["GET", "POST"])
 @auth.login_required(role="admin")
 @check_reset_password
 def update(id: str):
 
     if request.method == "GET":
         user = get_db().get_user_by_id(id)
-        return render_template("update-user-form.html", user=user)
+        return render_template("users/update-form.html", user=user)
 
     # Update user
     email = request.form["email"]
@@ -121,10 +129,11 @@ def update(id: str):
 
     if errors:
         user = get_db().get_user_by_id(id)
-        return render_template("user.html", user=user, errors=errors)
+        return render_template("users/update-form.html", user=user, errors=errors)
 
     get_db().update_user(id, {"email": email, "roles": roles})
-    return redirect(url_for("users.user", id=id))
+
+    return redirect(url_for("users.view", id=id))
 
 # Reset password
 # Users can reset their own passwrods
@@ -142,13 +151,13 @@ def reset_password(id: str):
         raise redirect(url_for("main.integrations", errors=["You do not have permission to access this page"]))
 
     if request.method == "GET":
-        return render_template("reset-password-form.html", user_id=id)
+        return render_template("users/reset-password-form.html", user_id=id)
 
     password = request.form["new_password"]
     confirm_password = request.form["new_password_confirm"]
 
     if password != confirm_password:
-        return render_template("reset-password-form.html", user_id=id, errors=["Passwords do not match"])
+        return render_template("users/reset-password-form.html", user_id=id, errors=["Passwords do not match"])
 
     # If the password is being reset by and admin, the user will be required to reset their pasword
     reset_password = is_admin
@@ -158,16 +167,19 @@ def reset_password(id: str):
     }
     get_db().update_user(id, updates)
 
-    return redirect(url_for("users.user",  id=id))
+    return redirect(url_for("users.view",  id=id))
 
-@bp.route("/<id>/delete", methods=["GET", "DELETE"])
+@bp.route("/<id>/delete", methods=["GET", "POST"])
 @auth.login_required(role="admin")
 @check_reset_password
 def delete(id: str):
 
+    user = get_db().get_user_by_id(id)
+    if not user:
+        return redirect(url_for("users.list_all"))
+
     if request.method == "GET":
-        user = get_db().get_user_by_id(id)
-        return render_template("confirm-delete-user.html", user=user)
+        return render_template("users/confirm-delete.html", user=user)
 
     get_db().delete_user(id)
     return redirect(url_for("users.list_all"))

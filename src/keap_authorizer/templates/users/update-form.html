@@ -1,9 +1,9 @@
-{% extends 'base-form.html' %}
+{% extends "form.html" %}
 
 {% block title %}Edit User{% endblock %}
 
-{% block content %}
-<form method="PUT" action="{{ url_for('users.update', id=user.id) }}">
+{% block form %}
+<form method="POST" action="{{ url_for('users.update', id=user.id) }}">
 	<div class="form-group">
 		<label for="email">Email:</label>
 		<input type="text" class="form-control" value="{{ user.email }}" id="email" name="email" required>

@@ -1,8 +1,8 @@
-{% extends  'base-form.html'  %}
+{% extends  "form.html"  %}
 
 {% block title %}Create User{% endblock %}
 
-{% block content %}
+{% block form %}
 <form method="POST" action="{{ url_for('users.create') }}">
 	<div class="form-group">
 		<label for="username">Username:</label>

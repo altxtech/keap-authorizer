@@ -13,7 +13,7 @@
 			<tr>
 				<th>Username</th>
 				<th>Email</th>
-				<th>Reset Password</th> 
+				<th>PWD Reset Required</th> 
 				<th>Roles</th>
 				<th>Actions</th>
 			</tr>
@@ -31,12 +31,13 @@
 						{% endif %}
 					</td>
 					<td>{{ user.roles | join(', ') }}</td>
-					<div class="btn-group">
-						<td>
+					<td>
+						<div class="btn-group">
 							<a href="{{ url_for('users.update', id=user.id) }}" class="btn btn-primary">Edit</a>
-							<a href="{{ url_for('users.reset_password', id=user.id) }}" class="btn btn-warning">Reset Password</a>
+							<a href="{{ url_for('users.reset_password', id=user.id) }}" class="btn btn-warning">Reset PWD</a>
 							<a href="{{ url_for('users.delete', id=user.id) }}" class="btn btn-danger">Delete</a>
-						</td>
+						</div>
+					</td>
 				</tr>
 			{% endfor %}
 		</tbody>
