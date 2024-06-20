@@ -47,10 +47,18 @@
         <div class="content">
 		{% block content %}{% endblock %}
 		<!--  Div to display alerts -->
-	    	<div class="container-md mt-3">
-			{% for error in errors %} <div class="alert alert-danger" role="alert">{{ error }}</div> {% endfor %}
-			{% for alert in alerts %} <div class="alert alert-warning" role="alert">{{ alert }}</div> {% endfor %}
-		</div>
+			<div class="container">
+				{% for error in errors %}
+					<div class="row content-align-center">
+						<div class="alert alert-danger col-6" role="alert">{{ error }}</div>
+					</div>
+				{% end for %}
+				{% for alert in alerts %}
+					<div class="row content-align-center">
+						<div class="alert alert-success col-6" role="alert">{{ alert }}</div>
+					</div>
+				{% end for %}
+			</div>
         </div>
     </div>
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
