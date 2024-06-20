@@ -183,8 +183,22 @@ resource "google_cloud_run_service" "app" {
           name  = "SECRET_ID"
           value = google_secret_manager_secret.secret.id
         }
+		volume_mounts {
+			mount_path = "/usr/src/app"
+			name = "secret"
+		}
       }
       service_account_name = google_service_account.sa.email
+	  volumes {
+		  name = "secret"
+		  secret {
+			  secret_name = google_secret_manager_secret.secret.name
+			  items {
+				  key = "latest"
+				  path = "config.py"
+			  }
+		  }
+	  }
     }
   }
 }
