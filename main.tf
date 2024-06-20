@@ -162,12 +162,21 @@ resource "google_project_iam_binding" "db_access" {
 # 2.6 SERVICE
 
 # Define a Google Cloud Run service
-resource "google_cloud_run_service" "app" {
+resource "google_cloud_run_v2_service" "app" {
   name     = "${var.service_name}-${var.env}"
   location = var.region 
 
   template {
-    spec {
+	  volumes {
+		  name = "app-config"
+		  secret {
+			  secret = google_cloud_secret_manager_secret.secret.secret_id
+			  items {
+				  version = "latest"
+				  path = "config.py"
+			  }
+		  }
+	  }
       containers {
 
         image = "${docker_registry_image.image.name}:latest"
@@ -179,28 +188,13 @@ resource "google_cloud_run_service" "app" {
           name  = "DATABASE_ID"
           value = google_firestore_database.database.id
         }
-        env {
-          name  = "SECRET_ID"
-          value = google_secret_manager_secret.secret.id
-        }
 		volume_mounts {
+			name = "app-config"
 			mount_path = "/usr/src/app"
-			name = "secret"
 		}
       }
       service_account_name = google_service_account.sa.email
-	  volumes {
-		  name = "secret"
-		  secret {
-			  secret_name = "test"
-			  items {
-				  key = "latest"
-				  path = "config.py"
-			  }
-		  }
-	  }
     }
-  }
 }
 
 /*
