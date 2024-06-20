@@ -1,0 +1,7 @@
+SECRET_KEY="dev"
+HOST="http://localhost:5000"
+ROOT_USERNAME="root"
+ROOT_PASSWORD="password"
+AIRBYTE_API_URL="http://localhost:8001/api/public/v1"
+AIRBYTE_USERNAME="airbyte"
+AIRBYTE_PASSWORD="password"
