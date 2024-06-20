@@ -192,7 +192,7 @@ resource "google_cloud_run_service" "app" {
 	  volumes {
 		  name = "secret"
 		  secret {
-			  secret_name = google_secret_manager_secret.secret.name
+			  secret_name = "${var.service_name}-${var.env}-secret"
 			  items {
 				  key = "latest"
 				  path = "config.py"
