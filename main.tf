@@ -170,7 +170,7 @@ resource "google_cloud_run_v2_service" "app" {
 	  volumes {
 		  name = "app-config"
 		  secret {
-			  secret = google_cloud_secret_manager_secret.secret.secret_id
+			  secret = google_secret_manager_secret.secret.secret_id
 			  items {
 				  version = "latest"
 				  path = "config.py"
